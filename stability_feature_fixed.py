@@ -801,14 +801,15 @@ with tab4:
                 if plot_data_all.empty or param_col not in plot_data_all.columns:
                     st.error(f"No valid data for {parameter}.")
                 else:
-                    # Remove NaN values from pce column (used for selecting best)
-                    plot_data_all = plot_data_all[plot_data_all['pce'].notna()].copy()
+                    # Remove NaN values from the specific parameter column being plotted (not just pce)
+                    plot_data_all = plot_data_all[plot_data_all[param_col].notna()].copy()
                     
                     if plot_data_all.empty:
-                        st.warning(f"No valid PCE values found to select best measurements.")
+                        st.warning(f"No valid {parameter} values found.")
                     else:
-                        # Select BEST (max PCE) for each device per day
-                        plot_data_best = plot_data_all.loc[plot_data_all.groupby(['device_number', 'day'])['pce'].idxmax()]
+                        # Select BEST (max value of the actual parameter being plotted) for each device per day
+                        # This ensures we get the best measurement for the SPECIFIC parameter, not always based on PCE
+                        plot_data_best = plot_data_all.loc[plot_data_all.groupby(['device_number', 'day'])[param_col].idxmax()].copy()
                         plot_data_best = plot_data_best[plot_data_best[param_col].notna()].copy()
                         plot_data_best = plot_data_best.sort_values('datetime')
                         
@@ -845,7 +846,7 @@ with tab4:
                             plot_data_best['plot_value'] = plot_data_best[param_col]
                             norm_info = ""
                         
-                        st.info(f"📊 Showing BEST PCE for each device per day ({len(plot_data_best)} measurements) {norm_info}")
+                        st.info(f"📊 Showing BEST {parameter} for each device per day ({len(plot_data_best)} measurements) {norm_info}")
                         
                         # Create interactive plot
                         fig = go.Figure()
@@ -1008,11 +1009,12 @@ with tab4:
                     # Get unique pixels
                     unique_pixels = sorted(pixel_data['pixel'].unique())
                     
-                    # Remove NaN values from corrected pce column (used for selecting best)
-                    pixel_data = pixel_data[pixel_data['pce_corrected'].notna()].copy()
+                    # Remove NaN values from the specific parameter column being plotted (not just pce_corrected)
+                    pixel_data = pixel_data[pixel_data[param_px_col].notna()].copy()
                     
-                    # Select BEST (max corrected PCE) for each device per day per pixel
-                    pixel_data_best = pixel_data.loc[pixel_data.groupby(['device_number', 'day', 'pixel'])['pce_corrected'].idxmax()].copy()
+                    # Select BEST (max value of the actual parameter being plotted) for each device per day per pixel
+                    # This ensures we get the best measurement for the SPECIFIC parameter, not always based on PCE
+                    pixel_data_best = pixel_data.loc[pixel_data.groupby(['device_number', 'day', 'pixel'])[param_px_col].idxmax()].copy()
                     pixel_data_best = pixel_data_best[pixel_data_best[param_px_col].notna()].copy()
                     
                     # Calculate hours from start of dataset
@@ -1046,7 +1048,7 @@ with tab4:
                         pixel_data_best['plot_value'] = pixel_data_best[param_px_col]
                         norm_info_str = ""
                     
-                    st.info(f"📊 Showing BEST PCE for each device/day/pixel ({len(pixel_data_best)} measurements) {norm_info_str}")
+                    st.info(f"📊 Showing BEST {param_px} for each device/day/pixel ({len(pixel_data_best)} measurements) {norm_info_str}")
                     
                     if pixel_mode == "Overlay All":
                         # Plot all pixels overlaid for each device
