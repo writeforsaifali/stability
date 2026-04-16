@@ -34,14 +34,20 @@ from database import StabilityDatabase
 def apply_mismatch_factors(data: pd.DataFrame, mismatch_factors: list) -> pd.DataFrame:
     """
     Apply mismatch factors to correct Jsc and PCE values for specific days (batches).
-    Corrected Jsc = Jsc * Mismatch Factor
-    Corrected PCE = Corrected Jsc * Voc * FF / 100
+    
+    Correction formula:
+      Corrected Jsc = Jsc / Mismatch Factor
+      Corrected PCE = Corrected Jsc * Voc * FF / 100
+    
+    The mismatch factor represents a measurement correction factor. A factor < 1.0
+    means the measurement is lower than the true value, so dividing by it increases
+    the corrected value. A factor > 1.0 means the measurement is higher, so dividing
+    by it decreases the corrected value.
     
     Args:
         data: DataFrame with columns including 'day', 'jsc', 'voc', 'ff'
         mismatch_factors: List of tuples (day_num, mismatch_factor)
-                         Factor between 0-1 to multiply with raw values
-                         e.g., 0.95 = 5% reduction, 1.05 = 5% increase
+                         Correction factor (typically 0.5-1.5)
                          Applies correction to all devices on that day
     
     Returns:
@@ -67,9 +73,9 @@ def apply_mismatch_factors(data: pd.DataFrame, mismatch_factors: list) -> pd.Dat
             if factor <= 0 or factor > 2.0:
                 print(f"Warning: Mismatch factor {factor} for Day {day_num} is outside normal range (0-2). Skipping.")
                 continue
-            # Correct Jsc by multiplying with mismatch factor (not dividing!)
-            # E.g., 0.95 means multiply by 0.95 (5% reduction in current)
-            adjusted_data.loc[mask, 'jsc_corrected'] = adjusted_data.loc[mask, 'jsc'] * factor
+            # Correct Jsc by dividing by mismatch factor
+            # Formula: Corrected Jsc = Jsc / Mismatch Factor
+            adjusted_data.loc[mask, 'jsc_corrected'] = adjusted_data.loc[mask, 'jsc'] / factor
             # Calculate corrected PCE: Corrected Jsc * Voc * FF / 100
             adjusted_data.loc[mask, 'pce_corrected'] = (
                 adjusted_data.loc[mask, 'jsc_corrected'] * 
@@ -456,7 +462,16 @@ with tab2:
     
     st.markdown("---")
     st.markdown("### Step 3: Apply Mismatch Factors (Optional)")
-    st.markdown("Adjust Jsc values for specific days (batches). Mismatch factor applies to ALL devices and pixels on that day.")
+    st.markdown("Adjust Jsc values for specific days (batches) using the mismatch correction factor.")
+    st.markdown("""
+    **Correction Formula:**
+    - **Corrected Jsc = Jsc / Mismatch Factor**
+    - **Corrected PCE = Corrected Jsc × Voc × FF / 100**
+    
+    The mismatch factor represents a measurement correction. For example:
+    - Factor 0.95: True value is higher than measured (divide by 0.95 to correct up)
+    - Factor 1.05: True value is lower than measured (divide by 1.05 to correct down)
+    """)
     
     # Get unique days from filtered data
     filtered_data_current = st.session_state.get('filtered_data', raw_data).copy()
@@ -478,17 +493,17 @@ with tab2:
         with mismatch_cols[1]:
             # Mismatch factor input via text/number input (0-1)
             mismatch_factor_input = st.text_input(
-                "Mismatch Factor (0-1):",
+                "Mismatch Factor (>0):",
                 value="0.95",
                 placeholder="e.g., 0.95",
-                help="Multiply Jsc by this factor (e.g., 0.95 = 5% reduction in Jsc)"
+                help="Divides Jsc to correct for measurement error (e.g., 0.95 means Corr Jsc = Jsc/0.95)"
             )
             
             # Validate and convert input
             try:
                 mismatch_factor = float(mismatch_factor_input)
-                if not (0 <= mismatch_factor <= 1):
-                    st.error("⚠️ Mismatch factor must be between 0 and 1")
+                if mismatch_factor <= 0 or mismatch_factor > 2.0:
+                    st.error("⚠️ Mismatch factor must be between 0 (exclusive) and 2.0")
                     mismatch_factor = None
             except ValueError:
                 st.error("⚠️ Invalid number format")
@@ -530,6 +545,12 @@ with tab2:
         if st.session_state.mismatch_factors:
             st.markdown("---")
             st.markdown("#### 📊 Applied Mismatch Factors:")
+            st.markdown("""
+            **Formula Applied:** Corrected Jsc = Jsc / Mismatch Factor
+            
+            Example: If Raw Jsc = 40 mA/cm² and Mismatch Factor = 0.95
+            - Corrected Jsc = 40 / 0.95 = 42.1 mA/cm² (correction applied)
+            """)
             
             mismatch_df = pd.DataFrame(
                 st.session_state.mismatch_factors,
@@ -563,7 +584,7 @@ with tab2:
                         st.success("Factor removed.")
                         st.rerun()
             
-            st.info("✓ Jsc values adjusted with mismatch factors. Statistics and Analysis will use corrected data.")
+            st.info("✓ Jsc values corrected using formula: Corrected Jsc = Jsc / Mismatch Factor. Statistics and Analysis will use corrected data.")
     
     # Show filtered data by device and day
     st.markdown("---")
