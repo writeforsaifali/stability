@@ -34,12 +34,14 @@ from database import StabilityDatabase
 def apply_mismatch_factors(data: pd.DataFrame, mismatch_factors: list) -> pd.DataFrame:
     """
     Apply mismatch factors to correct Jsc and PCE values for specific days (batches).
-    Corrected Jsc = Jsc / Mismatch Factor
+    Corrected Jsc = Jsc * Mismatch Factor
     Corrected PCE = Corrected Jsc * Voc * FF / 100
     
     Args:
         data: DataFrame with columns including 'day', 'jsc', 'voc', 'ff'
         mismatch_factors: List of tuples (day_num, mismatch_factor)
+                         Factor between 0-1 to multiply with raw values
+                         e.g., 0.95 = 5% reduction, 1.05 = 5% increase
                          Applies correction to all devices on that day
     
     Returns:
@@ -61,8 +63,13 @@ def apply_mismatch_factors(data: pd.DataFrame, mismatch_factors: list) -> pd.Dat
     if mismatch_factors:
         for day_num, factor in mismatch_factors:
             mask = adjusted_data['day'] == day_num
-            # Correct Jsc by dividing with mismatch factor
-            adjusted_data.loc[mask, 'jsc_corrected'] = adjusted_data.loc[mask, 'jsc'] / factor
+            # Validate factor is in acceptable range
+            if factor <= 0 or factor > 2.0:
+                print(f"Warning: Mismatch factor {factor} for Day {day_num} is outside normal range (0-2). Skipping.")
+                continue
+            # Correct Jsc by multiplying with mismatch factor (not dividing!)
+            # E.g., 0.95 means multiply by 0.95 (5% reduction in current)
+            adjusted_data.loc[mask, 'jsc_corrected'] = adjusted_data.loc[mask, 'jsc'] * factor
             # Calculate corrected PCE: Corrected Jsc * Voc * FF / 100
             adjusted_data.loc[mask, 'pce_corrected'] = (
                 adjusted_data.loc[mask, 'jsc_corrected'] * 
